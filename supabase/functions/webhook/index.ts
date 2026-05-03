@@ -41,11 +41,11 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Handle payment capture success
-    if (event.event === "payment.captured") {
-      const payment = event.payload.payment.entity
-      const orderId = payment.order_id
-      const paymentId = payment.id
+    // Handle payment capture success or order paid
+    if (event.event === "payment.captured" || event.event === "order.paid") {
+      const payment = event.payload.payment ? event.payload.payment.entity : event.payload.order.entity;
+      const orderId = event.event === "order.paid" ? event.payload.order.entity.id : payment.order_id;
+      const paymentId = event.event === "order.paid" ? null : payment.id;
 
       // 1. Find the pending payment by order_id
       const { data: paymentRecord, error: fetchError } = await supabaseAdmin
