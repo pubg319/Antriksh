@@ -3,7 +3,8 @@ import { useNavigate, useParams } from "react-router";
 import { Navbar } from "../components/Navbar";
 import { Sidebar } from "../components/Sidebar";
 import { Button } from "../components/Button";
-import { TrendingUp, BookOpen, Users, DollarSign, Image as ImageIcon, ArrowLeft } from "lucide-react";
+import { TrendingUp, BookOpen, Users, DollarSign, Image as ImageIcon, ArrowLeft, Layers } from "lucide-react";
+import { Link } from "react-router";
 import { supabase } from "../lib/supabase";
 
 export function AdminEditCoursePage() {
@@ -182,8 +183,18 @@ export function AdminEditCoursePage() {
               Back to Courses
             </button>
             
-            <h1 className="mb-2">Edit Course</h1>
-            <p className="text-muted-foreground mb-8">Update course information and settings</p>
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h1 className="mb-2">Edit Course</h1>
+                <p className="text-muted-foreground">Update course information and settings</p>
+              </div>
+              <Link to={`/admin/courses/content/${id}`}>
+                <Button variant="outline" className="text-[#5B47ED] border-[#5B47ED] hover:bg-[#5B47ED]/5">
+                  <Layers className="w-4 h-4 mr-2" />
+                  Manage Curriculum (Add Lessons/Tests)
+                </Button>
+              </Link>
+            </div>
 
             {error && (
               <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-lg border border-red-100">

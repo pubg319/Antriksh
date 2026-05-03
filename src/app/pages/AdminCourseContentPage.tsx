@@ -31,6 +31,7 @@ export function AdminCourseContentPage() {
   // Modal states
   const [moduleModalOpen, setModuleModalOpen] = useState(false);
   const [lessonModalOpen, setLessonModalOpen] = useState(false);
+  const [testModalOpen, setTestModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
 
@@ -42,6 +43,12 @@ export function AdminCourseContentPage() {
   const [lessonVideoId, setLessonVideoId] = useState("");
   const [lessonNotes, setLessonNotes] = useState("");
   const [lessonPosition, setLessonPosition] = useState("1");
+  
+  const [testTitle, setTestTitle] = useState("");
+  const [testDescription, setTestDescription] = useState("");
+  const [testPassingScore, setTestPassingScore] = useState("80");
+  const [testPosition, setTestPosition] = useState("1");
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sidebarItems = [
@@ -62,7 +69,8 @@ export function AdminCourseContentPage() {
         .from("modules")
         .select(`
           *,
-          lessons (*)
+          lessons (*),
+          tests (*)
         `)
         .eq("course_id", courseId)
         .order("position", { ascending: true });
@@ -70,6 +78,11 @@ export function AdminCourseContentPage() {
       if (modulesData) {
         modulesData.forEach(m => {
           if (m.lessons) m.lessons.sort((a: any, b: any) => a.position - b.position);
+          if (m.tests) m.tests.sort((a: any, b: any) => a.position - b.position);
+          
+          // Combine lessons and tests for rendering
+          m.items = [...(m.lessons || []).map((l:any) => ({...l, type: 'lesson'})), ...(m.tests || []).map((t:any) => ({...t, type: 'test'}))];
+          m.items.sort((a: any, b: any) => a.position - b.position);
         });
         setModules(modulesData);
       }
@@ -149,8 +162,38 @@ export function AdminCourseContentPage() {
     }
   };
 
+  const handleTestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      if (editingItem) {
+        await supabase.from("tests").update({
+          title: testTitle,
+          description: testDescription,
+          passing_score: parseInt(testPassingScore),
+          position: parseInt(testPosition)
+        }).eq("id", editingItem.id);
+      } else {
+        await supabase.from("tests").insert({
+          module_id: activeModuleId,
+          title: testTitle,
+          description: testDescription,
+          passing_score: parseInt(testPassingScore),
+          position: parseInt(testPosition)
+        });
+      }
+      setTestModalOpen(false);
+      setEditingItem(null);
+      fetchContent();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const deleteModule = async (id: string) => {
-    if (!confirm("Are you sure? This will delete all lessons in this module.")) return;
+    if (!confirm("Are you sure? This will delete all lessons and tests in this module.")) return;
     await supabase.from("modules").delete().eq("id", id);
     fetchContent();
   };
@@ -158,6 +201,12 @@ export function AdminCourseContentPage() {
   const deleteLesson = async (id: string) => {
     if (!confirm("Are you sure?")) return;
     await supabase.from("lessons").delete().eq("id", id);
+    fetchContent();
+  };
+
+  const deleteTest = async (id: string) => {
+    if (!confirm("Are you sure?")) return;
+    await supabase.from("tests").delete().eq("id", id);
     fetchContent();
   };
 
@@ -190,9 +239,28 @@ export function AdminCourseContentPage() {
       setLessonVideoId("");
       setLessonNotes("");
       const mod = modules.find(m => m.id === moduleId);
-      setLessonPosition((mod?.lessons?.length + 1 || 1).toString());
+      setLessonPosition((mod?.items?.length + 1 || 1).toString());
     }
     setLessonModalOpen(true);
+  };
+
+  const openTestModal = (moduleId: string, test?: any) => {
+    setActiveModuleId(moduleId);
+    if (test) {
+      setEditingItem(test);
+      setTestTitle(test.title);
+      setTestDescription(test.description || "");
+      setTestPassingScore((test.passing_score || 80).toString());
+      setTestPosition(test.position.toString());
+    } else {
+      setEditingItem(null);
+      setTestTitle("");
+      setTestDescription("");
+      setTestPassingScore("80");
+      const mod = modules.find(m => m.id === moduleId);
+      setTestPosition((mod?.items?.length + 1 || 1).toString());
+    }
+    setTestModalOpen(true);
   };
 
   if (loading && !modules.length) return <div className="min-h-screen bg-background flex items-center justify-center">Loading Content Builder...</div>;
@@ -249,29 +317,50 @@ export function AdminCourseContentPage() {
 
                   {expandedModules.has(module.id) && (
                     <div className="p-4 bg-white space-y-2 border-t border-border">
-                      {module.lessons?.map((lesson: any, lIdx: number) => (
-                        <div key={lesson.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:border-[#5B47ED]/50 hover:bg-accent/10 transition-all">
+                      {module.items?.map((item: any, idx: number) => (
+                        <div key={item.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:border-[#5B47ED]/50 hover:bg-accent/10 transition-all">
                           <div className="flex items-center gap-3">
-                            <Video className="w-4 h-4 text-[#5B47ED]" />
-                            <span className="text-sm font-medium">{lIdx + 1}. {lesson.title}</span>
+                            {item.type === 'lesson' ? (
+                              <Video className="w-4 h-4 text-[#5B47ED]" />
+                            ) : (
+                              <FileText className="w-4 h-4 text-orange-500" />
+                            )}
+                            <span className="text-sm font-medium">{idx + 1}. {item.title}</span>
+                            {item.type === 'test' && (
+                              <span className="text-[10px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full uppercase font-bold tracking-wider">Test</span>
+                            )}
                           </div>
                           <div className="flex items-center gap-1">
-                            <button onClick={() => openLessonModal(module.id, lesson)} className="p-1.5 hover:bg-accent rounded-md text-muted-foreground">
+                            {item.type === 'test' && (
+                              <button onClick={() => navigate(`/admin/courses/test/${item.id}`)} className="p-1.5 hover:bg-accent rounded-md text-muted-foreground" title="Build Test">
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button onClick={() => item.type === 'lesson' ? openLessonModal(module.id, item) : openTestModal(module.id, item)} className="p-1.5 hover:bg-accent rounded-md text-muted-foreground">
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => deleteLesson(lesson.id)} className="p-1.5 hover:bg-accent rounded-md text-red-400">
+                            <button onClick={() => item.type === 'lesson' ? deleteLesson(item.id) : deleteTest(item.id)} className="p-1.5 hover:bg-accent rounded-md text-red-400">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
                       ))}
-                      <button 
-                        onClick={() => openLessonModal(module.id)}
-                        className="w-full mt-2 py-2 border border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-[#5B47ED] hover:border-[#5B47ED]/50 transition-all flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add Lesson
-                      </button>
+                      <div className="flex gap-2 mt-2">
+                        <button 
+                          onClick={() => openLessonModal(module.id)}
+                          className="flex-1 py-2 border border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-[#5B47ED] hover:border-[#5B47ED]/50 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Lesson
+                        </button>
+                        <button 
+                          onClick={() => openTestModal(module.id)}
+                          className="flex-1 py-2 border border-dashed border-border rounded-lg text-sm text-muted-foreground hover:text-orange-500 hover:border-orange-500/50 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Test
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -358,6 +447,50 @@ export function AdminCourseContentPage() {
               <div className="flex justify-end gap-3 pt-2">
                 <Button type="button" variant="outline" onClick={() => setLessonModalOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Lesson"}</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Test Modal */}
+      {testModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+            <h2 className="text-xl font-bold mb-4">{editingItem ? "Edit Test Details" : "Add New Test"}</h2>
+            <form onSubmit={handleTestSubmit} className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Test Title</label>
+                  <input 
+                    type="text" required value={testTitle} onChange={e => setTestTitle(e.target.value)}
+                    className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B47ED]/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Position</label>
+                  <input 
+                    type="number" required value={testPosition} onChange={e => setTestPosition(e.target.value)}
+                    className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B47ED]/50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Description (Optional)</label>
+                <textarea 
+                  rows={2} value={testDescription} onChange={e => setTestDescription(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B47ED]/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1.5">Passing Score (%)</label>
+                <input 
+                  type="number" min="0" max="100" required value={testPassingScore} onChange={e => setTestPassingScore(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5B47ED]/50"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setTestModalOpen(false)}>Cancel</Button>
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Saving..." : "Save Test"}</Button>
               </div>
             </form>
           </div>

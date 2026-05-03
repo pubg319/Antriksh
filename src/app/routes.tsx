@@ -13,6 +13,7 @@ import { AdminUploadVideoPage } from "./pages/AdminUploadVideoPage";
 import { AdminCreateModulePage } from "./pages/AdminCreateModulePage";
 import { AdminEditCoursePage } from "./pages/AdminEditCoursePage";
 import { AdminCourseContentPage } from "./pages/AdminCourseContentPage";
+import { AdminTestBuilderPage } from "./pages/AdminTestBuilderPage";
 import { AdminLiveClassesPage } from "./pages/AdminLiveClassesPage";
 import { HelpCenterPage } from "./pages/HelpCenterPage";
 import { AuthPage } from "./pages/AuthPage";
@@ -50,6 +51,14 @@ export const router = createBrowserRouter([
     element: (
       <ProtectedRoute requireAdmin>
         <AdminCourseContentPage />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/admin/courses/test/:testId",
+    element: (
+      <ProtectedRoute requireAdmin>
+        <AdminTestBuilderPage />
       </ProtectedRoute>
     ),
   },

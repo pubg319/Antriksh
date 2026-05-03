@@ -16,6 +16,8 @@ import {
   ExternalLink
 } from "lucide-react";
 
+import { TestPlayer } from "../components/TestPlayer";
+
 export function CoursePlayerPage() {
   const { courseId, lessonId } = useParams();
   const [course, setCourse] = useState<any>(null);
@@ -80,6 +82,13 @@ export function CoursePlayerPage() {
               position,
               is_preview,
               video_id
+            ),
+            tests (
+              id,
+              title,
+              description,
+              position,
+              passing_score
             )
           )
         `)
@@ -89,17 +98,25 @@ export function CoursePlayerPage() {
       if (!courseError && courseData) {
         // Sort modules and lessons
         courseData.modules.sort((a: any, b: any) => a.position - b.position);
-        courseData.modules.forEach((m: any) => m.lessons.sort((a: any, b: any) => a.position - b.position));
+        courseData.modules.forEach((m: any) => {
+          if (m.lessons) m.lessons.sort((a: any, b: any) => a.position - b.position);
+          if (m.tests) m.tests.sort((a: any, b: any) => a.position - b.position);
+          
+          m.items = [
+            ...(m.lessons || []).map((l:any) => ({...l, type: 'lesson'})),
+            ...(m.tests || []).map((t:any) => ({...t, type: 'test'}))
+          ];
+          m.items.sort((a: any, b: any) => a.position - b.position);
+        });
         
         setCourse(courseData);
         
-        // Open the first module by default
         if (courseData.modules?.[0]) {
           setOpenModules(new Set([courseData.modules[0].id]));
         }
 
-        if (!selectedLessonId && courseData.modules?.[0]?.lessons?.[0]) {
-          setSelectedLessonId(courseData.modules[0].lessons[0].id);
+        if (!selectedLessonId && courseData.modules?.[0]?.items?.[0]) {
+          setSelectedLessonId(courseData.modules[0].items[0].id);
         }
 
         // Fetch Live Sessions for this course
@@ -229,18 +246,18 @@ export function CoursePlayerPage() {
     );
   }
 
-  const allLessons = course.modules?.flatMap((module: any) =>
-    module.lessons?.map((lesson: any) => ({ ...lesson, moduleId: module.id, moduleTitle: module.title }))
+  const allItems = course.modules?.flatMap((module: any) =>
+    module.items?.map((item: any) => ({ ...item, moduleId: module.id, moduleTitle: module.title }))
   ) || [];
 
-  const currentLessonIndex = allLessons.findIndex((l: any) => l.id === selectedLessonId);
-  const currentLesson = allLessons[currentLessonIndex];
-  const previousLesson = currentLessonIndex > 0 ? allLessons[currentLessonIndex - 1] : null;
+  const currentLessonIndex = allItems.findIndex((l: any) => l.id === selectedLessonId);
+  const currentLesson = allItems[currentLessonIndex];
+  const previousLesson = currentLessonIndex > 0 ? allItems[currentLessonIndex - 1] : null;
   const nextLesson =
-    currentLessonIndex < allLessons.length - 1 ? allLessons[currentLessonIndex + 1] : null;
+    currentLessonIndex < allItems.length - 1 ? allItems[currentLessonIndex + 1] : null;
 
   const completedLessonsCount = completedLessonsSet.size;
-  const progress = allLessons.length ? Math.round((completedLessonsCount / allLessons.length) * 100) : 0;
+  const progress = allItems.length ? Math.round((completedLessonsCount / allItems.length) * 100) : 0;
 
   const toggleLessonCompletion = async (targetLessonId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -288,7 +305,7 @@ export function CoursePlayerPage() {
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-2 text-sm">
             <span className="text-white/80">Your progress</span>
-            <span className="font-semibold">{completedLessonsCount} of {allLessons.length} ({progress}%)</span>
+            <span className="font-semibold">{completedLessonsCount} of {allItems.length} ({progress}%)</span>
           </div>
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-white hover:text-white/80 transition-colors">
             {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -317,33 +334,49 @@ export function CoursePlayerPage() {
         
         {/* Main Video Area (Left Desktop, Top Mobile) */}
         <main className="flex-1 flex flex-col overflow-y-auto bg-background relative">
-          <div className="w-full bg-black aspect-video flex items-center justify-center relative flex-shrink-0 shadow-lg">
-            {currentLesson?.video_id ? (
-              <Stream
-                controls
-                src={currentLesson.video_id}
-                className="w-full h-full object-contain"
-                onEnded={() => {
-                  if (currentLesson && !completedLessonsSet.has(currentLesson.id)) {
-                    toggleLessonCompletion(currentLesson.id);
-                  }
-                  if (nextLesson) {
-                    setSelectedLessonId(nextLesson.id);
-                  }
-                }}
-              />
-            ) : (
-              <div className="text-center text-white">
-                <PlayCircle className="w-20 h-20 mx-auto mb-4 opacity-80" />
-                <p className="text-lg">No Video Available</p>
-                <p className="text-sm text-white/70 mt-2">
-                  {currentLesson?.title}
-                </p>
+          {currentLesson?.type === 'test' ? (
+            <TestPlayer 
+              testId={currentLesson.id} 
+              courseId={courseId || ""} 
+              onComplete={() => {
+                if (!completedLessonsSet.has(currentLesson.id)) {
+                  toggleLessonCompletion(currentLesson.id);
+                }
+                if (nextLesson) {
+                  setSelectedLessonId(nextLesson.id);
+                }
+              }}
+            />
+          ) : (
+            <>
+              <div className="w-full bg-black aspect-video flex items-center justify-center relative flex-shrink-0 shadow-lg">
+                {currentLesson?.video_id ? (
+                  <Stream
+                    controls
+                    src={currentLesson.video_id}
+                    className="w-full h-full object-contain"
+                    onEnded={() => {
+                      if (currentLesson && !completedLessonsSet.has(currentLesson.id)) {
+                        toggleLessonCompletion(currentLesson.id);
+                      }
+                      if (nextLesson) {
+                        setSelectedLessonId(nextLesson.id);
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="text-center text-white">
+                    <PlayCircle className="w-20 h-20 mx-auto mb-4 opacity-80" />
+                    <p className="text-lg">No Video Available</p>
+                    <p className="text-sm text-white/70 mt-2">
+                      {currentLesson?.title}
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          <div className="flex-1 p-6 lg:p-10 max-w-4xl mx-auto w-full">
+              <div className="flex-1 p-6 lg:p-10 max-w-4xl mx-auto w-full">
+                {/* Lesson specific tabs and details here */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-4">
               <div className="flex-1">
                 <div className="text-sm text-muted-foreground mb-2 font-medium">
@@ -506,7 +539,9 @@ export function CoursePlayerPage() {
                 <ChevronRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
-          </div>
+            </div>
+          </>
+        )}
         </main>
 
         {/* Sidebar (Right Desktop, Bottom Mobile) */}
@@ -525,7 +560,7 @@ export function CoursePlayerPage() {
           <div className="flex-1 overflow-y-auto">
             {course.modules?.map((module: any, index: number) => {
               const isOpen = openModules.has(module.id);
-              const completedInModule = module.lessons.filter((l: any) => completedLessonsSet.has(l.id)).length;
+              const completedInModule = module.items.filter((l: any) => completedLessonsSet.has(l.id)).length;
 
               return (
                 <div key={module.id} className="border-b border-border">
@@ -538,7 +573,7 @@ export function CoursePlayerPage() {
                         Section {index + 1}: {module.title}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {completedInModule} / {module.lessons.length} | {module.lessons.length * 5}min
+                        {completedInModule} / {module.items.length} completed
                       </div>
                     </div>
                     {isOpen ? <ChevronUp className="w-5 h-5 text-muted-foreground mt-0.5" /> : <ChevronDown className="w-5 h-5 text-muted-foreground mt-0.5" />}
@@ -546,39 +581,43 @@ export function CoursePlayerPage() {
 
                   {isOpen && (
                     <div className="bg-white">
-                      {module.lessons?.map((lesson: any, lessonIdx: number) => {
-                        const isActive = lesson.id === selectedLessonId;
-                        const isCompleted = completedLessonsSet.has(lesson.id);
+                      {module.items?.map((item: any, itemIdx: number) => {
+                        const isActive = item.id === selectedLessonId;
+                        const isCompleted = completedLessonsSet.has(item.id);
 
                         return (
                           <div
-                            key={lesson.id}
+                            key={item.id}
                             className={`group w-full flex items-start gap-3 p-4 transition-colors cursor-pointer ${
                               isActive ? "bg-accent/50" : "hover:bg-accent/20"
                             }`}
                             onClick={(e) => {
                               // If clicking the checkbox, don't change the selected lesson
                               if ((e.target as HTMLElement).tagName.toLowerCase() !== 'input') {
-                                setSelectedLessonId(lesson.id);
+                                setSelectedLessonId(item.id);
                               }
                             }}
                           >
                             <input
                               type="checkbox"
                               checked={isCompleted}
-                              onChange={() => toggleLessonCompletion(lesson.id)}
+                              onChange={() => toggleLessonCompletion(item.id)}
                               className="mt-1 w-4 h-4 rounded-sm border-gray-300 text-black focus:ring-black cursor-pointer flex-shrink-0 accent-black"
                               title="Mark as complete"
                             />
                             <div className="flex-1 text-left">
                               <div className={`text-sm ${isActive ? "font-bold" : "text-foreground/90"}`}>
-                                {lessonIdx + 1}. {lesson.title}
+                                {itemIdx + 1}. {item.title}
                               </div>
                               <div className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                                <PlayCircle className="w-3.5 h-3.5" /> 5min
+                                {item.type === 'lesson' ? (
+                                  <><PlayCircle className="w-3.5 h-3.5" /> Video Lesson</>
+                                ) : (
+                                  <><FileText className="w-3.5 h-3.5 text-orange-500" /> Assessment Test</>
+                                )}
                               </div>
                             </div>
-                            {isActive && (
+                            {isActive && item.type === 'lesson' && (
                               <div className="hidden group-hover:flex items-center mt-1">
                                 <Button size="sm" variant="outline" className="h-7 text-xs px-2 py-0">
                                   <FileText className="w-3 h-3 mr-1" /> Resources

@@ -13,6 +13,7 @@ import {
   Video,
   Layers,
   Calendar,
+  Edit2,
 } from "lucide-react";
 
 export function AdminPanel() {
@@ -219,9 +220,21 @@ export function AdminPanel() {
                     </div>
                   </td>
                   <td className="py-4 px-4">
-                    <button className="p-2 hover:bg-accent rounded-lg transition-colors">
-                      <MoreVertical className="w-5 h-5 text-muted-foreground" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <Link to={`/admin/courses/content/${course.id}`} title="Manage Content">
+                        <button className="p-2 hover:bg-[#5B47ED]/10 rounded-lg transition-colors text-[#5B47ED]">
+                          <Layers className="w-5 h-5" />
+                        </button>
+                      </Link>
+                      <Link to={`/admin/courses/edit/${course.id}`} title="Edit Settings">
+                        <button className="p-2 hover:bg-accent rounded-lg transition-colors text-muted-foreground hover:text-foreground">
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                      </Link>
+                      <button className="p-2 hover:bg-accent rounded-lg transition-colors">
+                        <MoreVertical className="w-5 h-5 text-muted-foreground" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
